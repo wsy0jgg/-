@@ -830,6 +830,17 @@
   }
   .pack-name{ flex:1; font-size: 15.3px; font-weight:600; }
   .pack-name.done{ color: var(--sand-dim); text-decoration: line-through; }
+  .pack-name-input{
+    flex:1;
+    background: transparent;
+    border: none;
+    color: var(--sand);
+    font-size: 15.3px;
+    font-weight:600;
+    padding: 4px 2px;
+  }
+  .pack-name-input:focus{ outline:none; border-bottom: 1px solid var(--coral); }
+  .pack-name-input.done{ color: var(--sand-dim); text-decoration: line-through; }
   .pack-owner{
     font-size: 11.8px;
     color: var(--sand-dim);
@@ -1352,6 +1363,8 @@ function renderViews(){
   container.appendChild(buildDayView(d));
 }
 
+let editingItem = { day: null, id: null };
+
 function buildDayView(d){
   const panel = document.createElement("div");
   panel.className = "view active";
@@ -1381,13 +1394,15 @@ function buildDayView(d){
   }
 
   const items = (state.items[d.id] || []).slice().sort((a,b) => (a.time||"99:99").localeCompare(b.time||"99:99"));
+  const editingHere = editingItem.day === d.id ? state.items[d.id].find(x => x.id === editingItem.id) : null;
   html += `<div class="section-label">일정</div>`;
   if(items.length === 0){
     html += `<div class="empty">아직 추가된 장소가 없어요.<br>아래에서 맛집이나 관광지를 채워보세요.</div>`;
   } else {
     items.forEach((it, idx) => {
+      const isEditing = editingItem.day === d.id && editingItem.id === it.id;
       html += `
-        <div class="item">
+        <div class="item ${isEditing ? 'editing' : ''}" data-day="${d.id}" data-id="${it.id}" style="cursor:pointer; ${isEditing ? 'border-color:var(--tangerine);' : ''}">
           ${it.img ? `<img class="thumb" src="${escapeHtml(it.img)}" onerror="this.style.display='none'">` : ""}
           <div class="time">${it.time || "-"}</div>
           <div class="body">
@@ -1409,30 +1424,32 @@ function buildDayView(d){
 
   html += `
     <div class="add-form">
+      ${editingHere ? `<div class="section-label" style="margin-top:0;color:var(--tangerine);">일정 수정 중</div>` : ""}
       <div class="row">
-        <input class="w-time" data-field="time" data-day="${d.id}" placeholder="시간">
+        <input class="w-time" data-field="time" data-day="${d.id}" placeholder="시간" value="${editingHere ? escapeHtml(editingHere.time || "") : ""}">
         <select class="w-cat" data-field="cat" data-day="${d.id}">
-          <option value="food">맛집</option>
-          <option value="spot">관광지</option>
-          <option value="etc">기타</option>
+          <option value="food" ${editingHere && editingHere.cat === "food" ? "selected" : ""}>맛집</option>
+          <option value="spot" ${editingHere && editingHere.cat === "spot" ? "selected" : ""}>관광지</option>
+          <option value="etc" ${editingHere && editingHere.cat === "etc" ? "selected" : ""}>기타</option>
         </select>
       </div>
       <div class="row">
-        <input data-field="name" data-day="${d.id}" placeholder="장소 이름">
+        <input data-field="name" data-day="${d.id}" placeholder="장소 이름" value="${editingHere ? escapeHtml(editingHere.name || "") : ""}">
       </div>
       <div class="row">
-        <input data-field="location" data-day="${d.id}" placeholder="위치 (예: 애월읍, 제주시청 근처)">
+        <input data-field="location" data-day="${d.id}" placeholder="위치 (예: 애월읍, 제주시청 근처)" value="${editingHere ? escapeHtml(editingHere.location || "") : ""}">
       </div>
       <div class="row">
-        <input data-field="memo" data-day="${d.id}" placeholder="메모 (선택)">
+        <input data-field="memo" data-day="${d.id}" placeholder="메모 (선택)" value="${editingHere ? escapeHtml(editingHere.memo || "") : ""}">
       </div>
       <div class="row">
-        <input data-field="moveInfo" data-day="${d.id}" placeholder="다음 장소까지 이동 (예: 차로 15분 · 8km)">
+        <input data-field="moveInfo" data-day="${d.id}" placeholder="다음 장소까지 이동 (예: 차로 15분 · 8km)" value="${editingHere ? escapeHtml(editingHere.moveInfo || "") : ""}">
       </div>
       <div class="row">
-        <input data-field="img" data-day="${d.id}" placeholder="이미지 링크 (선택, URL 붙여넣기)">
+        <input data-field="img" data-day="${d.id}" placeholder="이미지 링크 (선택, URL 붙여넣기)" value="${editingHere ? escapeHtml(editingHere.img || "") : ""}">
       </div>
-      <button class="add-btn" data-day="${d.id}">+ 일정 추가</button>
+      <button class="add-btn" data-day="${d.id}">${editingHere ? "수정 완료" : "+ 일정 추가"}</button>
+      ${editingHere ? `<button class="add-btn" id="cancelEditBtn" style="background:var(--basalt-3); color:var(--sand); margin-top:6px;">취소</button>` : ""}
     </div>`;
 
   panel.innerHTML = html;
@@ -1451,15 +1468,36 @@ function buildDayView(d){
     });
   }
 
+  panel.querySelectorAll(".item").forEach(row => {
+    row.addEventListener("click", (e) => {
+      if(e.target.closest(".del")) return;
+      const day = row.dataset.day;
+      const id = row.dataset.id;
+      editingItem = (editingItem.day === day && editingItem.id === id) ? { day: null, id: null } : { day, id };
+      renderViews();
+      panel.querySelector(".add-form")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+
   panel.querySelectorAll(".del").forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
       const day = btn.dataset.day;
       const id = btn.dataset.id;
       state.items[day] = state.items[day].filter(x => x.id !== id);
+      if(editingItem.day === day && editingItem.id === id) editingItem = { day: null, id: null };
       saveState();
       renderViews();
     };
   });
+
+  const cancelBtn = panel.querySelector("#cancelEditBtn");
+  if(cancelBtn){
+    cancelBtn.onclick = () => {
+      editingItem = { day: null, id: null };
+      renderViews();
+    };
+  }
 
   const addBtn = panel.querySelector(".add-btn");
   addBtn.onclick = () => {
@@ -1477,16 +1515,30 @@ function buildDayView(d){
       return;
     }
 
-    state.items[day].push({
-      id: uid(),
-      time: timeInp.value.trim(),
-      cat: catInp.value,
-      name: nameInp.value.trim(),
-      location: locInp.value.trim(),
-      memo: memoInp.value.trim(),
-      moveInfo: moveInp.value.trim(),
-      img: imgInp.value.trim()
-    });
+    if(editingItem.day === day && editingItem.id){
+      const target = state.items[day].find(x => x.id === editingItem.id);
+      if(target){
+        target.time = timeInp.value.trim();
+        target.cat = catInp.value;
+        target.name = nameInp.value.trim();
+        target.location = locInp.value.trim();
+        target.memo = memoInp.value.trim();
+        target.moveInfo = moveInp.value.trim();
+        target.img = imgInp.value.trim();
+      }
+      editingItem = { day: null, id: null };
+    } else {
+      state.items[day].push({
+        id: uid(),
+        time: timeInp.value.trim(),
+        cat: catInp.value,
+        name: nameInp.value.trim(),
+        location: locInp.value.trim(),
+        memo: memoInp.value.trim(),
+        moveInfo: moveInp.value.trim(),
+        img: imgInp.value.trim()
+      });
+    }
 
     saveState();
     renderViews();
@@ -1629,7 +1681,7 @@ function buildPackingView(){
       html += `
         <div class="pack-item">
           <div class="pack-check ${p.checked ? 'checked' : ''}" data-id="${p.id}">${p.checked ? '✓' : ''}</div>
-          <div class="pack-name ${p.checked ? 'done' : ''}">${escapeHtml(p.name)}</div>
+          <input class="pack-name-input ${p.checked ? 'done' : ''}" data-id="${p.id}" value="${escapeHtml(p.name)}">
           <button class="del" data-pack-id="${p.id}">✕</button>
         </div>`;
     });
@@ -1649,6 +1701,16 @@ function buildPackingView(){
       saveState();
       renderViews();
     };
+  });
+
+  panel.querySelectorAll(".pack-name-input").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const item = state.packing.find(p => p.id === inp.dataset.id);
+      if(item && inp.value.trim()){
+        item.name = inp.value.trim();
+        saveState();
+      }
+    });
   });
 
   panel.querySelectorAll("[data-pack-id]").forEach(btn => {
