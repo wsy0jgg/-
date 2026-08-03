@@ -116,7 +116,58 @@
   .weather-day .wd-temp .lo{ color: var(--sand-dim); font-weight:600; }
   .weather-day .wd-rain{ font-size: 10.5px; color: var(--skyblue); }
 
-  /* ---- 뒤로가기 바 ---- */
+  /* ---- 로그인 잠금 화면 ---- */
+  .lock-screen{
+    min-height: 100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 85% -10%, rgba(242,128,60,0.20), transparent 55%),
+      var(--basalt);
+  }
+  .lock-box{
+    width: 100%;
+    max-width: 320px;
+    text-align:center;
+  }
+  .lock-icon{ font-size: 44px; margin-bottom: 8px; }
+  .lock-title{ font-size: 22px; font-weight:800; margin-bottom: 4px; }
+  .lock-sub{ font-size: 14px; color: var(--sand-dim); margin-bottom: 20px; }
+  .lock-input{
+    width:100%;
+    background: var(--basalt-2);
+    border: 1px solid var(--line);
+    color: var(--sand);
+    padding: 14px 16px;
+    border-radius: 12px;
+    font-size: 16px;
+    text-align:center;
+    letter-spacing: 2px;
+  }
+  .lock-input::placeholder{ color: var(--sand-dim); letter-spacing: normal; }
+  .lock-input:focus{ outline:none; border-color: var(--tangerine); }
+  .lock-btn{
+    width:100%;
+    margin-top: 12px;
+    background: var(--tangerine);
+    color: #1B0F06;
+    border:none;
+    font-weight: 800;
+    font-size: 15.3px;
+    padding: 14px;
+    border-radius: 12px;
+    cursor:pointer;
+  }
+  .lock-btn:active{ background: var(--tangerine-dim); }
+  .lock-btn:disabled{ opacity:0.6; }
+  .lock-error{
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--coral);
+    min-height: 18px;
+  }
   .topbar{
     display:none;
     align-items:center;
@@ -223,6 +274,8 @@
   .nc-route .icon-badge{ color: var(--leaf); }
   .nc-airport{ background: linear-gradient(150deg, rgba(224,177,92,0.26), var(--basalt-2)); }
   .nc-airport .icon-badge{ color: var(--gold); }
+  .nc-resort{ background: linear-gradient(150deg, rgba(184,178,214,0.26), var(--basalt-2)); }
+  .nc-resort .icon-badge{ color: var(--violet); }
   .nc-overview-top{
     grid-column: 1 / -1;
     background: linear-gradient(150deg, rgba(184,178,214,0.30), var(--basalt-2));
@@ -1070,6 +1123,19 @@
 </head>
 <body>
 
+<div id="lockScreen" class="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon">🌴</div>
+    <div class="lock-title">제주도 여행</div>
+    <div class="lock-sub">비밀번호를 입력하세요</div>
+    <input type="password" id="lockPassword" class="lock-input" placeholder="비밀번호" autocomplete="current-password">
+    <button id="lockSubmit" class="lock-btn">입장하기</button>
+    <div id="lockError" class="lock-error"></div>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
+
 <div class="hero">
   <div class="eyebrow">JEJU · 2026</div>
   <h1>제주도 여행</h1>
@@ -1092,8 +1158,11 @@
 
 <div id="views"></div>
 
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script>
 // ====== 여기에 본인의 Firebase 설정값을 붙여넣으세요 ======
 // Firebase 콘솔(console.firebase.google.com) > 프로젝트 설정 > 일반 > 내 앱에서 확인 가능
@@ -1122,6 +1191,7 @@ const ICON_PATHS = {
   pencil: '<path d="M12.5 20.5H21"/><path d="M17 3.5a2.1 2.1 0 013 3L7.5 19 3 20l1-4.5z"/>',
   compass: '<circle cx="12" cy="12" r="9.3"/><polygon points="15.3 8.7 13.6 13.6 8.7 15.3 10.4 10.4 15.3 8.7"/>',
   plane: '<path d="M22 2 12.6 21.4l-2.1-8.9L1.6 10.4Z"/>',
+  hotel: '<path d="M3 21V6a1 1 0 011-1h5v16"/><path d="M15 21V10a1 1 0 011-1h4a1 1 0 011 1v11"/><path d="M9 8h.01"/><path d="M9 11h.01"/><path d="M9 14h.01"/><path d="M9 17h.01"/><path d="M18 13h.01"/><path d="M18 16h.01"/><path d="M3 21h18"/>',
 };
 
 function svgIcon(name, size){
@@ -1209,7 +1279,7 @@ let state = {
   notes: [],
   freeNote: "",
   flightNotes: {},
-  menuOrder: ["overview", "d1", "d2", "d3", "packing", "notes", "route", "airport"],
+  menuOrder: ["overview", "d1", "d2", "d3", "packing", "notes", "route", "airport", "resort"],
   menuHidden: {}
 };
 
@@ -1284,6 +1354,7 @@ function getMenuInfo(id){
     notes: { icon: svgIcon("pencil"), label:"메모", sub:"자유롭게 적어두기", css:"nc-note", wide:false },
     route: { icon: svgIcon("compass"), label:"동선", sub:"제주 지도로 보기", css:"nc-route", wide:false },
     airport: { icon: svgIcon("plane"), label:"공항일정", sub:"항공편 상세 정보", css:"nc-airport", wide:false },
+    resort: { icon: svgIcon("hotel"), label:"리조트 정보", sub:"더 시에나 · 조식/석식/즐길거리", css:"nc-resort", wide:false },
   };
   return meta[id] || null;
 }
@@ -1354,6 +1425,7 @@ function renderQuickTabs(){
     notes: "📝 메모",
     route: "🧭 동선",
     airport: "✈️ 공항",
+    resort: "🏨 리조트",
   };
   const all = state.menuOrder
     .filter(id => !state.menuHidden[id])
@@ -1403,6 +1475,12 @@ function renderViews(){
   if(view === "airport"){
     titleEl.textContent = "공항일정";
     container.appendChild(buildAirportView());
+    return;
+  }
+
+  if(view === "resort"){
+    titleEl.textContent = "리조트 정보";
+    container.appendChild(buildResortView());
     return;
   }
 
@@ -1719,6 +1797,98 @@ function buildAirportView(){
       saveState();
     });
   });
+
+  return panel;
+}
+
+function buildResortView(){
+  const panel = document.createElement("div");
+  panel.className = "view active";
+
+  panel.innerHTML = `
+    <div class="fixed-card" style="border-left-color: var(--violet);">
+      <div class="tag" style="color:var(--violet);">숙소</div>
+      <div class="ttl">더 시에나 리조트 (The Siena Resort)</div>
+      <div class="meta">제주특별자치도 서귀포시 용흥로66번길 158-8</div>
+      <div class="meta" style="margin-top:4px;">체크인 15:00 · 체크아웃 11:00</div>
+    </div>
+
+    <div class="section-label">조식 · 석식</div>
+    <div class="flight-card">
+      <div class="flight-top">
+        <span class="flight-dir">조식</span>
+        <span class="flight-status">일캄포 (IL CAMPO) · GL층</span>
+      </div>
+      <div class="meta" style="margin-bottom:8px;">07:00 ~ 10:30 (입장마감 10:00) · 연중무휴<br>인터내셔널 뷔페 + 키즈메뉴 + 건강식</div>
+      <div class="flight-divider"></div>
+      <div class="flight-info-grid">
+        <div class="flight-info-item">
+          <div class="flight-info-label">성인</div>
+          <div class="flight-info-value">55,000원</div>
+        </div>
+        <div class="flight-info-item">
+          <div class="flight-info-label">소인(36개월~13세)</div>
+          <div class="flight-info-value">25,000원</div>
+        </div>
+      </div>
+      <div class="meta" style="margin-top:6px; color:var(--ocean);">투숙객 사전예약 시 10% 할인</div>
+    </div>
+    <div class="flight-card">
+      <div class="flight-top">
+        <span class="flight-dir">석식</span>
+        <span class="flight-status">씨푸드 와인 무제한 뷔페</span>
+      </div>
+      <div class="meta" style="margin-bottom:8px;">17:30~19:20(1부) · 19:40~22:00(2부)</div>
+      <div class="flight-divider"></div>
+      <div class="flight-info-grid">
+        <div class="flight-info-item">
+          <div class="flight-info-label">성인</div>
+          <div class="flight-info-value">165,000원</div>
+        </div>
+        <div class="flight-info-item">
+          <div class="flight-info-label">소인</div>
+          <div class="flight-info-value">80,000원</div>
+        </div>
+      </div>
+      <div class="meta" style="margin-top:6px; color:var(--ocean);">투숙객 10% 할인 · 예약제 운영 가능성 있음, 사전 확인 추천</div>
+    </div>
+
+    <div class="section-label">즐길거리 · 부대시설</div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">🏊 폰테(Fonte) 인피니티풀</div>
+      <div class="meta">38도 야외 온수풀, 연중 이용 가능 · 실내수영장과 연결 · 후기에서 풀사이드 바 떡볶이·어묵 인기</div>
+    </div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">💆 사우나 · 피트니스 센터</div>
+      <div class="meta">투숙객 무료 이용 · 타월/락카 무료 제공</div>
+    </div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">☕ Arco Lounge</div>
+      <div class="meta">라운지에서 웰컴 드링크(금가루라떼 등) 및 티타임</div>
+    </div>
+
+    <div class="section-label">주변 관광지</div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">엉또폭포</div>
+      <div class="meta">약 1.1km · 비 온 뒤에만 폭포수가 흐르는 것으로 유명</div>
+    </div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">고근산</div>
+      <div class="meta">약 2.4km · 오름 산책, 서귀포 시내·바다 전망</div>
+    </div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">서귀포 매일올레시장</div>
+      <div class="meta">차로 약 10분 · 흑돼지·해산물 먹거리, 야시장</div>
+    </div>
+    <div class="fixed-card">
+      <div class="ttl" style="font-size:15px;">제주신화월드</div>
+      <div class="meta">약 21.3km · 테마파크·쇼핑몰 복합단지</div>
+    </div>
+
+    <div class="flight-tip">
+      ⚠️ 레스토랑은 민소매·샌들·슬리퍼 착용 시 입장이 제한될 수 있고, 문신은 가려주길 권장해요.<br>
+      💡 위 정보는 리조트 공식 홈페이지(thesiena.co.kr)와 최근 방문 후기를 참고해 정리했어요. 가격·운영시간은 시즌에 따라 바뀔 수 있으니, 체크인 전 리조트에 한 번 더 확인하는 걸 추천해요.
+    </div>`;
 
   return panel;
 }
@@ -2274,9 +2444,15 @@ async function loadWeather(){
   const el = document.getElementById("weatherWidget");
   if(!el) return;
   try{
-    const url = "https://api.open-meteo.com/v1/forecast?latitude=33.4996&longitude=126.5312&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=10";
-    const res = await fetch(url);
-    const data = await res.json();
+    const baseParams = "latitude=33.4996&longitude=126.5312&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=10";
+    let res = await fetch(`https://api.open-meteo.com/v1/forecast?${baseParams}&models=kma_seamless`);
+    let data = await res.json();
+
+    // KMA 모델 요청이 실패하면(지역 제한 등) 기본(best_match) 모델로 재시도
+    if(data.error){
+      res = await fetch(`https://api.open-meteo.com/v1/forecast?${baseParams}`);
+      data = await res.json();
+    }
 
     const tripDates = ["2026-08-06", "2026-08-07", "2026-08-08"];
     const tripLabels = ["Day1", "Day2", "Day3"];
@@ -2317,8 +2493,73 @@ async function loadWeather(){
   }
 }
 
-loadState();
-loadWeather();
+// ====== 잠금 방식 설정 ======
+// 지금은 간단 비밀번호 잠금(false). Firebase 콘솔에서 Authentication 설정을 마친 뒤
+// USE_FIREBASE_AUTH를 true로 바꾸고 FAMILY_EMAIL을 콘솔에 등록한 이메일과 맞추면
+// 진짜 서버 인증 로그인으로 업그레이드됩니다.
+const USE_FIREBASE_AUTH = false;
+const FAMILY_EMAIL = "jeju-family@app.local";
+
+// 간단 비밀번호 잠금에서 사용할 비밀번호 — 원하는 값으로 바꿔서 쓰세요.
+const SIMPLE_PASSWORD = "1234";
+const SIMPLE_AUTH_KEY = "jeju-trip-unlocked";
+
+const auth = USE_FIREBASE_AUTH ? firebase.auth() : null;
+
+function showApp(){
+  document.getElementById("lockScreen").style.display = "none";
+  document.getElementById("appRoot").style.display = "";
+  loadState();
+  loadWeather();
+}
+
+if(USE_FIREBASE_AUTH){
+  auth.onAuthStateChanged((user) => {
+    if(user) showApp();
+  });
+} else {
+  if(localStorage.getItem(SIMPLE_AUTH_KEY) === "1"){
+    showApp();
+  }
+}
+
+function doLogin(){
+  const pwInput = document.getElementById("lockPassword");
+  const errEl = document.getElementById("lockError");
+  const btn = document.getElementById("lockSubmit");
+  const pw = pwInput.value;
+  errEl.textContent = "";
+  if(!pw){
+    errEl.textContent = "비밀번호를 입력해주세요";
+    return;
+  }
+
+  if(USE_FIREBASE_AUTH){
+    btn.disabled = true;
+    btn.textContent = "확인 중...";
+    auth.signInWithEmailAndPassword(FAMILY_EMAIL, pw)
+      .catch(() => {
+        errEl.textContent = "비밀번호가 틀렸어요";
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = "입장하기";
+      });
+  } else {
+    if(pw === SIMPLE_PASSWORD){
+      localStorage.setItem(SIMPLE_AUTH_KEY, "1");
+      showApp();
+    } else {
+      errEl.textContent = "비밀번호가 틀렸어요";
+    }
+  }
+}
+
+document.getElementById("lockSubmit").onclick = doLogin;
+document.getElementById("lockPassword").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") doLogin();
+});
+
 
 if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
