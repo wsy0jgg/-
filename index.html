@@ -2134,10 +2134,16 @@ function buildRouteView(){
       ${pinsSvg}
     </svg>`;
 
-  function gmapsDirUrl(fromText, toText){
-    const o = encodeURIComponent(fromText + " 제주");
-    const dest = encodeURIComponent(toText + " 제주");
-    return `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${dest}&travelmode=driving`;
+  function naverDirUrl(fromZone, fromName, toZone, toName){
+    const sname = encodeURIComponent(fromName);
+    const ename = encodeURIComponent(toName);
+    return `https://m.map.naver.com/route.nhn?menu=route&sname=${sname}&sx=${fromZone.lng}&sy=${fromZone.lat}&ename=${ename}&ex=${toZone.lng}&ey=${toZone.lat}&pathType=0&showMap=true`;
+  }
+
+  function kakaoDirUrl(fromZone, fromName, toZone, toName){
+    const f = encodeURIComponent(fromName);
+    const t = encodeURIComponent(toName);
+    return `https://map.kakao.com/link/from/${f},${fromZone.lat},${fromZone.lng}/to/${t},${toZone.lat},${toZone.lng}`;
   }
 
   let placesListHtml = "";
@@ -2151,7 +2157,13 @@ function buildRouteView(){
       placesListHtml += `<div style="font-size:13.8px; padding:6px 0; ${idx < items.length-1 ? 'border-bottom:1px dashed var(--line);' : ''}">${idx+1}. ${escapeHtml(it.name)}${it.location ? ` <span style="color:var(--sand-dim); font-size:12.3px;">(${escapeHtml(it.location)})</span>` : ""}</div>`;
       if(idx < items.length - 1){
         const nextIt = items[idx+1];
-        placesListHtml += `<a href="${gmapsDirUrl(it.location || it.name, nextIt.location || nextIt.name)}" target="_blank" rel="noopener" style="display:inline-block; font-size:12.3px; color:${color}; text-decoration:none; padding:4px 0 8px; font-weight:700;">🚗 실제 경로 보기 (구글맵) →</a>`;
+        const fromZone = matchZone(it);
+        const toZone = matchZone(nextIt);
+        if(fromZone && toZone){
+          placesListHtml += `<div style="display:flex; gap:10px; flex-wrap:wrap; padding:4px 0 10px;">
+          <a href="${naverDirUrl(fromZone, it.name, toZone, nextIt.name)}" target="_blank" rel="noopener" style="font-size:12.3px; color:${color}; text-decoration:none; font-weight:700;">🟢 네이버지도 →</a>
+          <a href="${kakaoDirUrl(fromZone, it.name, toZone, nextIt.name)}" target="_blank" rel="noopener" style="font-size:12.3px; color:${color}; text-decoration:none; font-weight:700;">🟡 카카오맵 →</a></div>`;
+        }
       }
     });
     placesListHtml += `</div></div>`;
@@ -2163,7 +2175,7 @@ function buildRouteView(){
     ${controlsHtml}
     ${legendHtml}
     <div class="route-map-wrap">${svg}</div>
-    <div class="route-hint">지도 위 표시는 대략적인 구역 기준 스케치예요. 아래에서 실제 방문 순서를 확인하고, "실제 경로 보기"를 누르면 구글맵에서 실시간 교통 반영된 정확한 경로와 시간을 볼 수 있어요.</div>
+    <div class="route-hint">지도 위 표시는 대략적인 구역 기준 스케치예요. 아래 "실제 방문 장소" 목록에서 네이버지도/카카오맵 링크를 누르면 실시간 교통이 반영된 정확한 경로와 시간을 각 앱에서 확인할 수 있어요. (구역 대표 좌표 기준이라 정확한 출발지와 약간 다를 수 있어요)</div>
     <div class="section-label" style="margin-top:20px;">실제 방문 장소</div>
     ${placesListHtml}`;
 
