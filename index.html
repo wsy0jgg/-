@@ -1289,6 +1289,15 @@ function uid(){ return Math.random().toString(36).slice(2, 9); }
 
 let applyingRemote = false;
 
+const DEFAULT_MENU_ORDER = ["overview", "d1", "d2", "d3", "packing", "notes", "route", "airport", "resort"];
+
+function migrateMenuOrder(){
+  if(!Array.isArray(state.menuOrder)) state.menuOrder = DEFAULT_MENU_ORDER.slice();
+  DEFAULT_MENU_ORDER.forEach(id => {
+    if(!state.menuOrder.includes(id)) state.menuOrder.push(id);
+  });
+}
+
 async function loadState(){
   try{
     const snapshot = await db.ref(STORAGE_KEY).once('value');
@@ -1304,6 +1313,7 @@ async function loadState(){
   if(typeof state.notes === "string"){
     state.notes = state.notes.trim() ? [{ id: uid(), text: state.notes.trim() }] : [];
   }
+  migrateMenuOrder();
   render();
 
   // 다른 사람이 수정하면 실시간으로 반영
@@ -1317,6 +1327,7 @@ async function loadState(){
       if(typeof state.notes === "string"){
         state.notes = state.notes.trim() ? [{ id: uid(), text: state.notes.trim() }] : [];
       }
+      migrateMenuOrder();
       render();
       applyingRemote = false;
     }
@@ -2448,8 +2459,15 @@ async function loadWeather(){
     let res = await fetch(`https://api.open-meteo.com/v1/forecast?${baseParams}&models=kma_seamless`);
     let data = await res.json();
 
-    // KMA 모델 요청이 실패하면(지역 제한 등) 기본(best_match) 모델로 재시도
-    if(data.error){
+    // KMA 모델 요청이 실패하거나(에러) 값이 비어있으면(null) 기본(best_match) 모델로 재시도
+    const looksEmpty = data.error
+      || !data.current
+      || data.current.temperature_2m === null
+      || data.current.weather_code === null
+      || !data.daily
+      || !data.daily.temperature_2m_max
+      || data.daily.temperature_2m_max.every(v => v === null || v === undefined);
+    if(looksEmpty){
       res = await fetch(`https://api.open-meteo.com/v1/forecast?${baseParams}`);
       data = await res.json();
     }
@@ -2458,7 +2476,7 @@ async function loadWeather(){
     const tripLabels = ["Day1", "Day2", "Day3"];
 
     let html = "";
-    if(data.current){
+    if(data.current && data.current.temperature_2m !== null && data.current.temperature_2m !== undefined){
       html += `
         <div class="weather-current">
           <span class="wc-icon">${weatherIcon(data.current.weather_code)}</span>
@@ -2473,16 +2491,19 @@ async function loadWeather(){
       tripDates.forEach((date, idx) => {
         const dIdx = data.daily.time.indexOf(date);
         if(dIdx === -1) return;
+        const hiRaw = data.daily.temperature_2m_max[dIdx];
+        const loRaw = data.daily.temperature_2m_min[dIdx];
+        if(hiRaw === null || hiRaw === undefined || loRaw === null || loRaw === undefined) return;
         const code = data.daily.weather_code[dIdx];
-        const hi = Math.round(data.daily.temperature_2m_max[dIdx]);
-        const lo = Math.round(data.daily.temperature_2m_min[dIdx]);
+        const hi = Math.round(hiRaw);
+        const lo = Math.round(loRaw);
         const rain = data.daily.precipitation_probability_max[dIdx];
         html += `
           <div class="weather-day">
             <div class="wd-label">${tripLabels[idx]}</div>
             <div class="wd-icon">${weatherIcon(code)}</div>
             <div class="wd-temp">${hi}° <span class="lo">${lo}°</span></div>
-            ${rain !== undefined ? `<div class="wd-rain">💧${rain}%</div>` : ""}
+            ${(rain !== undefined && rain !== null) ? `<div class="wd-rain">💧${rain}%</div>` : ""}
           </div>`;
       });
     }
