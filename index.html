@@ -74,6 +74,48 @@
     font-size: 15.3px;
   }
 
+  /* ---- 날씨 위젯 ---- */
+  .weather-widget{
+    margin-top: 14px;
+    display:flex;
+    gap: 8px;
+    overflow-x:auto;
+  }
+  .weather-loading{
+    font-size: 13.3px;
+    color: var(--sand-dim);
+  }
+  .weather-current{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 16px;
+    flex-shrink:0;
+  }
+  .weather-current .wc-icon{ font-size: 26px; }
+  .weather-current .wc-temp{ font-size: 20px; font-weight:800; }
+  .weather-current .wc-label{ font-size: 11.3px; color: var(--sand-dim); }
+  .weather-day{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 2px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 12px;
+    flex-shrink:0;
+    min-width: 62px;
+  }
+  .weather-day .wd-label{ font-size: 11px; color: var(--sand-dim); font-weight:700; }
+  .weather-day .wd-icon{ font-size: 20px; margin: 2px 0; }
+  .weather-day .wd-temp{ font-size: 12.3px; font-weight:700; }
+  .weather-day .wd-temp .lo{ color: var(--sand-dim); font-weight:600; }
+  .weather-day .wd-rain{ font-size: 10.5px; color: var(--skyblue); }
+
   /* ---- 뒤로가기 바 ---- */
   .topbar{
     display:none;
@@ -1032,6 +1074,9 @@
   <div class="eyebrow">JEJU · 2026</div>
   <h1>제주도 여행</h1>
   <div class="subdate">8월 6일(목) — 8월 8일(토) · 2박 3일</div>
+  <div id="weatherWidget" class="weather-widget">
+    <div class="weather-loading">날씨 불러오는 중...</div>
+  </div>
 </div>
 
 <div class="topbar" id="topbar">
@@ -2211,7 +2256,69 @@ function escapeHtml(s){
   return div.innerHTML;
 }
 
+const WMO_WEATHER = {
+  0: ["☀️", "맑음"], 1: ["🌤️", "대체로 맑음"], 2: ["⛅", "구름 조금"], 3: ["☁️", "흐림"],
+  45: ["🌫️", "안개"], 48: ["🌫️", "짙은 안개"],
+  51: ["🌦️", "이슬비"], 53: ["🌦️", "이슬비"], 55: ["🌦️", "강한 이슬비"],
+  61: ["🌧️", "약한 비"], 63: ["🌧️", "비"], 65: ["🌧️", "강한 비"],
+  66: ["🌧️", "어는 비"], 67: ["🌧️", "강한 어는 비"],
+  71: ["🌨️", "약한 눈"], 73: ["🌨️", "눈"], 75: ["❄️", "강한 눈"], 77: ["❄️", "싸락눈"],
+  80: ["🌦️", "소나기"], 81: ["🌧️", "소나기"], 82: ["⛈️", "강한 소나기"],
+  85: ["🌨️", "소낙눈"], 86: ["❄️", "강한 소낙눈"],
+  95: ["⛈️", "뇌우"], 96: ["⛈️", "우박 동반 뇌우"], 99: ["⛈️", "강한 우박 뇌우"],
+};
+function weatherIcon(code){ return (WMO_WEATHER[code] || ["🌡️","-"])[0]; }
+function weatherLabel(code){ return (WMO_WEATHER[code] || ["🌡️","-"])[1]; }
+
+async function loadWeather(){
+  const el = document.getElementById("weatherWidget");
+  if(!el) return;
+  try{
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=33.4996&longitude=126.5312&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=10";
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const tripDates = ["2026-08-06", "2026-08-07", "2026-08-08"];
+    const tripLabels = ["Day1", "Day2", "Day3"];
+
+    let html = "";
+    if(data.current){
+      html += `
+        <div class="weather-current">
+          <span class="wc-icon">${weatherIcon(data.current.weather_code)}</span>
+          <div>
+            <div class="wc-temp">${Math.round(data.current.temperature_2m)}°C</div>
+            <div class="wc-label">지금 제주 · ${weatherLabel(data.current.weather_code)}</div>
+          </div>
+        </div>`;
+    }
+
+    if(data.daily && data.daily.time){
+      tripDates.forEach((date, idx) => {
+        const dIdx = data.daily.time.indexOf(date);
+        if(dIdx === -1) return;
+        const code = data.daily.weather_code[dIdx];
+        const hi = Math.round(data.daily.temperature_2m_max[dIdx]);
+        const lo = Math.round(data.daily.temperature_2m_min[dIdx]);
+        const rain = data.daily.precipitation_probability_max[dIdx];
+        html += `
+          <div class="weather-day">
+            <div class="wd-label">${tripLabels[idx]}</div>
+            <div class="wd-icon">${weatherIcon(code)}</div>
+            <div class="wd-temp">${hi}° <span class="lo">${lo}°</span></div>
+            ${rain !== undefined ? `<div class="wd-rain">💧${rain}%</div>` : ""}
+          </div>`;
+      });
+    }
+
+    el.innerHTML = html || `<div class="weather-loading">날씨 정보를 가져오지 못했어요</div>`;
+  }catch(e){
+    el.innerHTML = `<div class="weather-loading">날씨 정보를 가져오지 못했어요</div>`;
+  }
+}
+
 loadState();
+loadWeather();
 
 if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
