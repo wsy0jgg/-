@@ -1877,7 +1877,7 @@ function buildNotesView(){
 
 // 제주도 주요 구역 (대략적인 위경도 기준 — 실제 좌표에 가깝게 잡아 거리 계산에 사용)
 const ZONES = [
-  { key:"jeju_si", label:"제주시·공항", lat:33.5097, lng:126.5219, match:["제주시","공항","제주공항"], dy:-9 },
+  { key:"jeju_si", label:"제주시·공항", lat:33.5097, lng:126.5219, match:["제주시","공항","제주공항","성화로"], dy:-9 },
   { key:"jocheon", label:"조천·삼양", lat:33.5390, lng:126.6350, match:["조천","삼양","신촌"], dy:-9 },
   { key:"gujwa", label:"구좌·월정", lat:33.5560, lng:126.7900, match:["구좌","월정","세화","김녕"], dy:-9 },
   { key:"seongsan", label:"성산", lat:33.4587, lng:126.9296, match:["성산","섭지코지"], dx:-10, dy:-6 },
@@ -1955,10 +1955,19 @@ function dedupeZones(zonePoints){
 }
 
 let routeToggles = { dist: true, time: true, zoneLabels: true };
+let dayToggles = { d1: true, d2: true, d3: true };
 
 function buildRouteView(){
   const panel = document.createElement("div");
   panel.className = "view active";
+
+  let dayChipsHtml = `<div class="route-controls">`;
+  DAYS.forEach(d => {
+    const on = dayToggles[d.id];
+    const color = DAY_ROUTE_COLOR[d.id];
+    dayChipsHtml += `<div class="rt-chip day-chip ${on ? 'on' : ''}" data-day="${d.id}" style="${on ? `background:${color};color:#1B0F06;border-color:${color};` : ''}">${on ? '✓ ' : ''}${d.label}</div>`;
+  });
+  dayChipsHtml += `</div>`;
 
   let controlsHtml = `<div class="route-controls">`;
   const toggleDefs = [
@@ -1973,6 +1982,7 @@ function buildRouteView(){
 
   let legendHtml = `<div class="route-legend">`;
   DAYS.forEach(d => {
+    if(!dayToggles[d.id]) return;
     const items = (state.items[d.id] || []).slice().sort((a,b) => (a.time||"99:99").localeCompare(b.time||"99:99"));
     const zonePoints = dedupeZones(items.map(matchZone).filter(Boolean));
     let total = 0;
@@ -1995,6 +2005,7 @@ function buildRouteView(){
   let pinsSvg = "";
   let distLabelsSvg = "";
   DAYS.forEach(d => {
+    if(!dayToggles[d.id]) return;
     const items = (state.items[d.id] || []).slice().sort((a,b) => (a.time||"99:99").localeCompare(b.time||"99:99"));
     const zonePoints = dedupeZones(items.map(matchZone).filter(Boolean));
     const pxPoints = zonePoints.map(z => project(z.lat, z.lng));
@@ -2054,12 +2065,21 @@ function buildRouteView(){
 
   panel.innerHTML = `
     <div class="section-label">방문 동선</div>
+    ${dayChipsHtml}
     ${controlsHtml}
     ${legendHtml}
     <div class="route-map-wrap">${svg}</div>
     <div class="route-hint">일정의 "위치" 값을 기준으로 구역을 자동 인식해 표시해요. 거리·시간은 직선거리와 평균 시속 40km 가정으로 어림 계산한 값이라 실제와 차이가 있을 수 있어요.</div>`;
 
-  panel.querySelectorAll(".rt-chip").forEach(chip => {
+  panel.querySelectorAll(".day-chip").forEach(chip => {
+    chip.onclick = () => {
+      const day = chip.dataset.day;
+      dayToggles[day] = !dayToggles[day];
+      renderViews();
+    };
+  });
+
+  panel.querySelectorAll(".rt-chip:not(.day-chip)").forEach(chip => {
     chip.onclick = () => {
       const key = chip.dataset.key;
       routeToggles[key] = !routeToggles[key];
