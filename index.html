@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>제주도 여행 8.6-8.8</title>
+
+<!-- PWA: 홈 화면에 추가하면 앱처럼 열립니다 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#171F2B">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="제주여행">
 <style>
   :root{
     --basalt: #171F2B;
@@ -2125,13 +2134,38 @@ function buildRouteView(){
       ${pinsSvg}
     </svg>`;
 
+  function gmapsDirUrl(fromText, toText){
+    const o = encodeURIComponent(fromText + " 제주");
+    const dest = encodeURIComponent(toText + " 제주");
+    return `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${dest}&travelmode=driving`;
+  }
+
+  let placesListHtml = "";
+  DAYS.forEach(d => {
+    if(!dayToggles[d.id]) return;
+    const items = (state.items[d.id] || []).slice().sort((a,b) => (a.time||"99:99").localeCompare(b.time||"99:99"));
+    if(items.length === 0) return;
+    const color = DAY_ROUTE_COLOR[d.id];
+    placesListHtml += `<div class="ov-collapse" style="margin-bottom:10px;"><div class="ov-collapse-head" style="cursor:default;"><span class="ov-collapse-icon" style="color:${color};">●</span><span class="ov-collapse-title">${d.label} 방문 순서</span></div><div class="ov-collapse-body" style="padding-top:0;">`;
+    items.forEach((it, idx) => {
+      placesListHtml += `<div style="font-size:13.8px; padding:6px 0; ${idx < items.length-1 ? 'border-bottom:1px dashed var(--line);' : ''}">${idx+1}. ${escapeHtml(it.name)}${it.location ? ` <span style="color:var(--sand-dim); font-size:12.3px;">(${escapeHtml(it.location)})</span>` : ""}</div>`;
+      if(idx < items.length - 1){
+        const nextIt = items[idx+1];
+        placesListHtml += `<a href="${gmapsDirUrl(it.location || it.name, nextIt.location || nextIt.name)}" target="_blank" rel="noopener" style="display:inline-block; font-size:12.3px; color:${color}; text-decoration:none; padding:4px 0 8px; font-weight:700;">🚗 실제 경로 보기 (구글맵) →</a>`;
+      }
+    });
+    placesListHtml += `</div></div>`;
+  });
+
   panel.innerHTML = `
     <div class="section-label">방문 동선</div>
     ${dayChipsHtml}
     ${controlsHtml}
     ${legendHtml}
     <div class="route-map-wrap">${svg}</div>
-    <div class="route-hint">일정의 "위치" 값을 기준으로 구역을 자동 인식해 표시해요. 거리·시간은 직선거리와 평균 시속 40km 가정으로 어림 계산한 값이라 실제와 차이가 있을 수 있어요.</div>`;
+    <div class="route-hint">지도 위 표시는 대략적인 구역 기준 스케치예요. 아래에서 실제 방문 순서를 확인하고, "실제 경로 보기"를 누르면 구글맵에서 실시간 교통 반영된 정확한 경로와 시간을 볼 수 있어요.</div>
+    <div class="section-label" style="margin-top:20px;">실제 방문 장소</div>
+    ${placesListHtml}`;
 
   panel.querySelectorAll(".day-chip").forEach(chip => {
     chip.onclick = () => {
@@ -2166,6 +2200,13 @@ function escapeHtml(s){
 }
 
 loadState();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(err => console.log("SW 등록 실패", err));
+  });
+}
+
 </script>
 
 </body>
